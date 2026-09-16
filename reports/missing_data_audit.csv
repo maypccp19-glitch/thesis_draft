@@ -1,0 +1,16 @@
+source,step,count
+TMD,raw_rows,16656
+TMD,dropped_unparseable_time,0
+TMD,dropped_unparseable_latlon,0
+TMD,dropped_out_of_range_latlon,0
+TMD,dropped_unparseable_mag,0
+TMD,dropped_mag_le_0,0
+TMD,kept,16656
+USGS,raw_rows,47151
+USGS,dropped_non_earthquake_type,0
+USGS,dropped_unparseable_time,0
+USGS,dropped_unparseable_latlon,0
+USGS,dropped_out_of_range_latlon,0
+USGS,dropped_unparseable_mag,0
+USGS,dropped_mag_le_0,0
+USGS,kept,47151

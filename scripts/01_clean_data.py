@@ -158,3 +158,58 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ---------------------------------------------------------------------------
+# Additive extension (does not change dedupe() or main() above): a version of
+# the dedup step that also records the (time_offset, distance_offset) of every
+# matched TMD-USGS pair, so the 60s / 50km cutoffs used by dedupe() can be
+# sanity-checked instead of just asserted. See scripts/05_data_quality.py.
+# ---------------------------------------------------------------------------
+def haversine_km(lat1, lon1, lat2, lon2):
+    r = 6371.0
+    p1, p2 = np.radians(lat1), np.radians(lat2)
+    dphi = np.radians(lat2 - lat1)
+    dlmb = np.radians(lon2 - lon1)
+    a = np.sin(dphi / 2) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(dlmb / 2) ** 2
+    return 2 * r * np.arcsin(np.sqrt(a))
+
+
+def dedupe_with_diagnostics(tmd, usgs, time_window_s=60, dist_window_km=50):
+    """
+    Same match criterion as dedupe() (a USGS event within `time_window_s`
+    seconds and `dist_window_km` km), except it keeps the closest-distance
+    match per TMD event (dedupe() takes the first one found) so the reported
+    offsets reflect the best candidate pair. Returns the deduped TMD frame
+    plus a DataFrame of every matched pair's actual time offset (seconds) and
+    distance offset (km) - useful for checking whether the 60s/50km cutoffs
+    used by dedupe() are well chosen, or too tight/loose, for this catalog.
+    """
+    tmd = tmd.sort_values("time_utc").reset_index(drop=True)
+    usgs_sorted = usgs.sort_values("time_utc").reset_index(drop=True)
+    u_times = usgs_sorted["time_utc"].values
+    u_lat = usgs_sorted["lat"].values
+    u_lon = usgs_sorted["lon"].values
+
+    window = np.timedelta64(time_window_s, "s")
+    is_dup = np.zeros(len(tmd), dtype=bool)
+    matches = []  # (tmd_index, time_offset_s, distance_km)
+    lo = 0
+    for i, t in enumerate(tmd["time_utc"].values):
+        while lo < len(u_times) and u_times[lo] < t - window:
+            lo += 1
+        best = None  # (distance_km, time_offset_s)
+        jj = lo
+        while jj < len(u_times) and u_times[jj] <= t + window:
+            d = haversine_km(tmd["lat"].iloc[i], tmd["lon"].iloc[i], u_lat[jj], u_lon[jj])
+            if d <= dist_window_km:
+                dt_s = abs((u_times[jj] - t) / np.timedelta64(1, "s"))
+                if best is None or d < best[0]:
+                    best = (d, dt_s)
+            jj += 1
+        if best is not None:
+            is_dup[i] = True
+            matches.append((i, best[1], best[0]))
+
+    match_df = pd.DataFrame(matches, columns=["tmd_index", "time_offset_s", "distance_km"])
+    return tmd.loc[~is_dup].reset_index(drop=True), match_df

@@ -187,3 +187,82 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ---------------------------------------------------------------------------
+# Additive extension (does not change any function or the main() run above):
+# a depth-colored map reconciled with THIS repo's classify() boundaries
+# (scripts/02_source_zones.py), replacing an earlier ad hoc plot that used
+# different, inconsistent zone names/boundaries. Instead of drawing the raw
+# Z1-Z7 bounding boxes (several overlap - see classify()'s if/elif priority
+# order), this shades the actual *resolved* classification on a fine lat/lon
+# grid, so what's drawn always matches what classify() would assign.
+# ---------------------------------------------------------------------------
+import sys as _sys
+import os as _os
+import matplotlib.colors as mcolors
+
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from _modutil import load_script as _load_script
+
+_zones_mod = _load_script("02_source_zones")
+classify = _zones_mod.classify
+
+
+def plot_depth_by_zone_viridis(df, grid_step=0.15):
+    """Southeast Asia seismicity colored by depth (viridis), with a
+    background shading of the resolved 7-zone classification (from
+    classify() in scripts/02_source_zones.py) and Unclassified events marked
+    distinctly. Saves figures/05_depth_by_zone.png."""
+    lon_grid = np.arange(88, 143 + grid_step, grid_step)
+    lat_grid = np.arange(-13, 30 + grid_step, grid_step)
+    LON, LAT = np.meshgrid(lon_grid, lat_grid)
+
+    zone_codes = ZONE_ORDER  # ["Z1", ..., "Z7", "Unclassified"]
+    zone_to_int = {z: i for i, z in enumerate(zone_codes)}
+    classify_vec = np.vectorize(lambda la, lo: zone_to_int[classify(la, lo)])
+    ZGRID = classify_vec(LAT, LON)
+
+    fig, ax = plt.subplots(figsize=(12, 10))
+
+    bg_cmap = mcolors.ListedColormap([ZONE_COLOR[z] for z in zone_codes])
+    bg_norm = mcolors.BoundaryNorm(np.arange(-0.5, len(zone_codes) + 0.5, 1), bg_cmap.N)
+    ax.contourf(LON, LAT, ZGRID, levels=np.arange(-0.5, len(zone_codes) + 0.5, 1),
+                cmap=bg_cmap, norm=bg_norm, alpha=0.15)
+
+    for zone in zone_codes:
+        if zone == "Unclassified":
+            continue
+        mask = ZGRID == zone_to_int[zone]
+        if mask.any():
+            ax.text(LON[mask].mean(), LAT[mask].mean(), zone, fontsize=13, fontweight="bold",
+                    ha="center", va="center",
+                    bbox=dict(boxstyle="round", fc="white", ec="black", alpha=0.85))
+
+    classified = df[df["zone_code"] != "Unclassified"]
+    unclassified = df[df["zone_code"] == "Unclassified"]
+
+    sc = ax.scatter(classified["lon"], classified["lat"],
+                     c=classified["depth_km"].clip(upper=300),
+                     cmap="viridis", s=6, alpha=0.65, linewidths=0)
+    ax.scatter(unclassified["lon"], unclassified["lat"], marker="x", color="red", s=14,
+               alpha=0.6, linewidths=0.9, label=f"Unclassified (n={len(unclassified)})")
+
+    cbar = fig.colorbar(sc, ax=ax, shrink=0.8)
+    cbar.set_label("Depth (km, clipped at 300)")
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title("SE Asia seismicity by depth, with resolved 7-zone classification\n"
+                  "(zone boundaries per scripts/02_source_zones.py classify())")
+    ax.set_aspect("equal")
+    ax.legend(loc="lower left", fontsize=8, framealpha=0.9)
+    ax.grid(alpha=0.15)
+    fig.tight_layout()
+    fig.savefig(f"{FIG_DIR}/05_depth_by_zone.png", dpi=150)
+    plt.close(fig)
+    print(f"Saved {FIG_DIR}/05_depth_by_zone.png")
+
+
+if __name__ == "__main__":
+    _df_full = pd.read_csv(IN_PATH, parse_dates=["time_utc"])
+    plot_depth_by_zone_viridis(_df_full)
