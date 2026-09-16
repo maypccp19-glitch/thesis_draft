@@ -1,31 +1,25 @@
 """
-Step 2 - Define 7 tectonic plates/microplates relevant to Southeast Asia and
-classify every event in the cleaned catalog into one of them.
+Step 2 - Define 7 tectonic source zones for Southeast Asia and classify
+every event in the cleaned catalog into one of them.
 
-Replaces an earlier version of this script that zoned by fault segment
-(Sumatra megathrust, Sumatran Fault, etc.) instead of by tectonic plate.
-
-These 7 plates are the standard set used in regional geodynamics / GPS block
-models of Southeast Asia (e.g. Bird, 2003 "An updated digital model of plate
-boundaries"; Simons et al., 2007 "A decade of GPS in Southeast Asia"). As
-before, the boundaries used here are a first-order, deliberately coarse
-approximation (simple linear boundaries / bounding boxes) meant for
-exploratory data analysis - not a substitute for an authoritative plate
-boundary dataset (e.g. Bird's PB2002 model) before spatial-probability
-modeling. Seismicity is generated at plate *boundaries*; the boxes below
-approximate where each boundary/subduction zone sits, not the full interior
-extent of each plate.
+These 7 zones are a first-order, literature-informed approximation of the
+major tectonic elements that generate seismicity in the study region
+(Hall, 2002; Simons et al., 2007; general SE Asia seismotectonic summaries).
+They are deliberately coarse (simple linear boundaries / bounding boxes) and
+are meant for exploratory data analysis only. Before any spatial-probability
+modeling, the boundaries should be refined against an authoritative fault /
+source database (e.g. the GEM Global Active Faults Database) or the
+zonation from a specific PSHA study the thesis chooses to follow.
 
 Zone list:
-  Z1 Burma Plate               (Andaman Sea, Myanmar, Sagaing Fault, Indo-Burma Ranges)
-  Z2 Indo-Australian Plate     (subducting plate: offshore Sumatra, Java-Bali trench)
-  Z3 Sunda Plate                (overriding plate: Indochina, Malay Peninsula, Borneo,
-                                 onshore Sumatra/Java-Nusa Tenggara)
-  Z4 Philippine Sea Plate      (Philippine Mobile Belt, Manila Trench, Philippine
-                                 Trench, Luzon-Taiwan collision)
-  Z5 Molucca Sea Plate         (Sulawesi, Halmahera, Molucca Sea collision)
-  Z6 Banda Sea / Timor Microplate  (eastern Indonesia collision zone)
-  Z7 Pacific Plate             (western edge: Yap, Palau, Caroline Ridge)
+  Z1 Sunda Megathrust - Sumatra Segment        (offshore subduction interface)
+  Z2 Great Sumatran Fault Zone                 (onshore dextral strike-slip)
+  Z3 Sunda Megathrust - Java to Nusa Tenggara  (offshore subduction interface)
+  Z4 Andaman-Nicobar-Myanmar Arc & Sagaing FZ  (Indo-Burma subduction + Sagaing)
+  Z5 Shan-Thai / Indochina Intraplate Zone     (mainland SE Asia intraplate faults)
+  Z6 Philippine Mobile Belt                    (Philippine Trench/Fault, Manila
+                                                 Trench, Luzon-Taiwan collision)
+  Z7 Sulawesi-Molucca Sea-Banda Arc            (eastern Indonesia collision zone)
 
 Output: data/processed/catalog_with_zones.csv
 """
@@ -37,74 +31,54 @@ OUT_PATH = "data/processed/catalog_with_zones.csv"
 ZONE_DEF_PATH = "data/processed/source_zone_definitions.csv"
 
 ZONES = [
-    {"id": 1, "code": "Z1", "name": "Burma Plate"},
-    {"id": 2, "code": "Z2", "name": "Indo-Australian Plate"},
-    {"id": 3, "code": "Z3", "name": "Sunda Plate"},
-    {"id": 4, "code": "Z4", "name": "Philippine Sea Plate"},
-    {"id": 5, "code": "Z5", "name": "Molucca Sea Plate"},
-    {"id": 6, "code": "Z6", "name": "Banda Sea / Timor Microplate"},
-    {"id": 7, "code": "Z7", "name": "Pacific Plate"},
+    {"id": 1, "code": "Z1", "name": "Sunda Megathrust - Sumatra Segment"},
+    {"id": 2, "code": "Z2", "name": "Great Sumatran Fault Zone"},
+    {"id": 3, "code": "Z3", "name": "Sunda Megathrust - Java to Nusa Tenggara"},
+    {"id": 4, "code": "Z4", "name": "Andaman-Nicobar-Myanmar Arc & Sagaing Fault System"},
+    {"id": 5, "code": "Z5", "name": "Shan-Thai / Indochina Intraplate Zone"},
+    {"id": 6, "code": "Z6", "name": "Philippine Mobile Belt"},
+    {"id": 7, "code": "Z7", "name": "Sulawesi - Molucca Sea - Banda Arc"},
 ]
 ZONE_NAME = {z["code"]: z["name"] for z in ZONES}
 
 
 def sumatra_coast_lon(lat):
     """Approx. west-coast-of-Sumatra longitude as a function of latitude,
-    anchored on Banda Aceh (95.3, 5.5) and Bengkulu (102.3, -3.8). Used to
-    split the Sumatra segment into the subducting Indo-Australian Plate
-    (offshore, west of the coast) and the overriding Sunda Plate (onshore)."""
+    anchored on Banda Aceh (95.3, 5.5) and Bengkulu (102.3, -3.8)."""
     return 99.44 - 0.7527 * lat
 
 
 def classify(lat, lon):
-    # Z1: Burma Plate (Andaman Sea, Myanmar, Sagaing Fault, Indo-Burma Ranges)
+    # Z4: Andaman Sea / Myanmar Indo-Burma arc / Sagaing fault
     if 92.0 <= lon <= 98.5 and 6.5 <= lat <= 28.5:
-        return "Z1"
+        return "Z4"
 
-    # Z2 / Z3: Sumatra split between the subducting Indo-Australian Plate
-    # (offshore, incl. outer-rise/forearc seismicity) and the overriding
-    # Sunda Plate (onshore), by a linearized paleo-coastline running NW-SE.
-    # Longitude capped at 105.5 so the Sunda Strait / Lampung tip does not
-    # bleed into western Java.
+    # Z1 / Z2: Sumatra megathrust (offshore, incl. outer-rise/forearc
+    # seismicity) vs Sumatran Fault (onshore), split by a linearized
+    # paleo-coastline running NW-SE. Longitude is capped at 105.5 so the
+    # Sunda Strait / Lampung tip does not bleed into western Java (Z3).
     if -7.0 <= lat <= 6.5 and lon <= 105.5:
         coast = sumatra_coast_lon(lat)
         if coast - 10.0 <= lon < coast - 0.3:
-            return "Z2"  # Indo-Australian Plate (offshore)
+            return "Z1"
         if coast - 0.3 <= lon <= coast + 3.0:
-            return "Z3"  # Sunda Plate (onshore)
+            return "Z2"
 
-    # Z3: Sunda Plate - mainland Indochina & Malay Peninsula
+    # Z5: mainland SE Asia intraplate (Thailand, Laos, Cambodia, Vietnam,
+    # southern Yunnan, Malay Peninsula)
     if 97.0 <= lon <= 110.0 and 5.0 <= lat <= 23.5:
-        return "Z3"
-
-    # Z3: Sunda Plate - Borneo
-    if 108.0 <= lon <= 119.0 and -5.0 <= lat <= 7.5:
-        return "Z3"
-
-    # Z3: Sunda Plate - onshore Java to Nusa Tenggara (north of the coast)
-    if 105.0 <= lon <= 118.0 and -8.5 <= lat <= -6.0:
-        return "Z3"
-
-    # Z2: Indo-Australian Plate - offshore Java-Bali trench (south of the coast)
-    if 105.0 <= lon <= 118.0 and -11.5 <= lat <= -8.5:
-        return "Z2"
-
-    # Z4: Philippine Sea Plate (Philippine Mobile Belt, Manila Trench,
-    # Philippine Trench, Luzon-Taiwan collision)
-    if 118.0 <= lon <= 127.5 and 4.0 <= lat <= 25.5:
-        return "Z4"
-
-    # Z5: Molucca Sea Plate (Sulawesi, Halmahera, Molucca Sea collision)
-    if 118.0 <= lon <= 129.0 and -3.5 <= lat <= 6.5:
         return "Z5"
 
-    # Z6: Banda Sea / Timor Microplate (eastern Indonesia collision zone,
-    # incl. Flores, Alor, Timor, Seram)
-    if 118.0 <= lon <= 135.0 and -11.5 <= lat <= -3.5:
+    # Z3: Java to Nusa Tenggara megathrust
+    if 105.0 <= lon <= 126.0 and -11.5 <= lat <= -6.0:
+        return "Z3"
+
+    # Z6: Philippine Mobile Belt (incl. Manila Trench, Luzon-Taiwan collision)
+    if 118.0 <= lon <= 127.5 and 4.0 <= lat <= 25.5:
         return "Z6"
 
-    # Z7: Pacific Plate (western edge - Yap, Palau, Caroline Ridge)
-    if 127.0 <= lon <= 141.0 and -5.0 <= lat <= 15.0:
+    # Z7: Sulawesi - Molucca Sea - Banda Arc (eastern Indonesia)
+    if 113.0 <= lon <= 135.0 and -11.0 <= lat <= 6.5:
         return "Z7"
 
     return "Unclassified"
@@ -113,17 +87,14 @@ def classify(lat, lon):
 def sanity_check():
     """Spot-check classification against well-known landmark coordinates."""
     checks = [
-        ("Bangkok, Thailand", 13.75, 100.50, "Z3"),
-        ("Chiang Mai, Thailand", 18.79, 98.98, "Z3"),
-        ("Yangon, Myanmar", 16.80, 96.15, "Z1"),
-        ("Banda Aceh, Indonesia (N. Sumatra, onshore)", 5.55, 95.32, "Z3"),
-        ("Offshore W. Sumatra (2004 Sumatra-Andaman rupture area)", 3.30, 95.85, "Z2"),
-        ("Jakarta, Indonesia (Java, onshore)", -6.21, 106.85, "Z3"),
-        ("Offshore south Java trench", -10.00, 110.00, "Z2"),
-        ("Manila, Philippines", 14.60, 120.98, "Z4"),
-        ("Manado, Indonesia (N. Sulawesi)", 1.49, 124.85, "Z5"),
-        ("Dili, Timor-Leste", -8.55, 125.57, "Z6"),
-        ("Koror, Palau", 7.34, 134.48, "Z7"),
+        ("Bangkok, Thailand", 13.75, 100.50, "Z5"),
+        ("Chiang Mai, Thailand", 18.79, 98.98, "Z5"),
+        ("Yangon, Myanmar", 16.80, 96.15, "Z4"),
+        ("Banda Aceh, Indonesia (N. Sumatra)", 5.55, 95.32, "Z2"),
+        ("Offshore W. Sumatra (2004 Sumatra-Andaman rupture area)", 3.30, 95.85, "Z1"),
+        ("Jakarta, Indonesia (Java)", -6.21, 106.85, "Z3"),
+        ("Manila, Philippines", 14.60, 120.98, "Z6"),
+        ("Manado, Indonesia (N. Sulawesi)", 1.49, 124.85, "Z7"),
     ]
     print("\nSanity check against known landmarks:")
     ok = True
